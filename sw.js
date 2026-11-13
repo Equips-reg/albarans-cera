@@ -1,5 +1,7 @@
-// Service worker: permet que l'aplicació funcioni sense connexió.
-const VERSIO = 'albarans-cera-v4';
+// Service worker: l'aplicació funciona sense connexió.
+// La pàgina (index.html) es busca primer a internet, perquè les actualitzacions arribin de seguida;
+// la resta de fitxers es serveixen des de la memòria cau.
+const VERSIO = 'albarans-cera-v5';
 const FITXERS = ['./', './index.html', './jspdf.umd.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,12 +17,17 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
-      const copia = resp.clone();
-      caches.open(VERSIO).then(c => c.put(e.request, copia));
-      return resp;
-    }).catch(() => caches.match('./index.html')))
-  );
+  if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
+  const esPagina = e.request.mode === 'navigate' || e.request.url.endsWith('.html') || e.request.url.endsWith('/');
+  if (esPagina) {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        const copia = resp.clone();
+        caches.open(VERSIO).then(c => c.put(e.request, copia));
+        return resp;
+      }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
