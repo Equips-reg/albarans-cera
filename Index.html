@@ -110,7 +110,7 @@
   <section id="v-inici" class="vista">
     <div id="avisPendents" class="avis" style="display:none"></div>
     <div id="menuTipus"></div>
-    <button class="menu-boto elim" id="botoMenuEliminar"><span class="ic">🗑</span><span><b>Eliminar albarà</b><small>Albarans d'aquest telèfon de les últimes 48 hores</small></span></button>
+    <button class="menu-boto elim" id="botoMenuEliminar"><span><b>Eliminar albarà</b><small>Albarans d'aquest telèfon de les últimes 48 hores</small></span></button>
   </section>
 
   <!-- ===================== NOU ALBARÀ ===================== -->
@@ -119,7 +119,7 @@
 
     <div class="targeta">
       <button id="botoDictar" class="boto prim">🎤 Dictar l'albarà</button>
-      <p class="ajuda" id="ajudaDictat">Digueu el nom de cada camp abans del valor: «<i>Parc Figueres. Equip taula ERA. Codi de barres 123456. Número de sèrie ARAK1234. Motiu taula de baixa.</i>» Per corregir, torneu a dictar només el camp que calgui: els altres no canvien.</p>
+      <p class="ajuda" id="ajudaDictat">Podeu dictar-ho tot seguit, dient el nom de cada camp abans del valor: «<i>Parc Figueres. Equip taula ERA. Codi de barres 123456. Número de sèrie ARAK1234. Motiu taula de baixa.</i>» Per corregir un camp, torneu a prémer «Dictar» i digueu només aquell camp: els altres no canvien.</p>
       <p class="ajuda" id="darrerDictat" style="font-style:italic"></p>
     </div>
 
@@ -161,7 +161,6 @@
     <div class="targeta">
       <div class="botons" style="flex-direction:column">
         <button id="botoCompartir" class="boto ample">📤 Compartir el PDF</button>
-        <button id="botoMateixes" class="boto prim ample">＋ Un altre albarà amb el mateix parc i data</button>
         <button id="botoInici" class="boto ample">Tornar a l'inici</button>
       </div>
       <p class="ajuda">Si us adoneu que l'albarà no és correcte, el podeu eliminar des de «Eliminar albarà» durant les 48 hores següents.</p>
@@ -180,29 +179,34 @@
     <div class="targeta">
       <h2>Aquest telèfon</h2>
       <dl class="resum" id="infoTelefon"></dl>
-      <label class="camp" style="margin-top:12px"><span>Regió per defecte als albarans</span><input id="cfgRegio" list="llistaRegions"></label>
-      <button id="desarConfig" class="boto ample">Desar</button>
     </div>
-    <div class="targeta">
-      <h2>Registre a Google</h2>
-      <label class="camp"><span>Adreça del servei</span><input id="cfgUrl"></label>
-      <div class="botons">
-        <button id="desarServei" class="boto prim">Desar i provar</button>
-        <button id="enviarPendents" class="boto">Enviar pendents</button>
+    <div class="targeta" id="targetaClauCoord">
+      <h2>Coordinador</h2>
+      <p class="ajuda" style="margin-top:0">Opcions per al coordinador. Cal la clau del CERA.</p>
+      <div class="fila" style="margin-top:10px"><input id="clauCoord" type="password" placeholder="Clau del CERA"><button id="obrirCoord" class="boto">Obrir</button></div>
+    </div>
+    <div id="seccioCoord" hidden>
+      <div class="targeta">
+        <h2>Registre a Google</h2>
+        <label class="camp"><span>Adreça del servei</span><input id="cfgUrl"></label>
+        <div class="botons">
+          <button id="desarServei" class="boto prim">Desar i provar</button>
+          <button id="enviarPendents" class="boto">Enviar pendents</button>
+        </div>
+        <p class="ajuda" id="estatServei"></p>
       </div>
-      <p class="ajuda" id="estatServei"></p>
+      <div class="targeta">
+        <h2>Instal·lar</h2>
+        <button id="botoInstal" class="boto prim ample" hidden>Instal·lar l'aplicació</button>
+        <p class="ajuda">A Chrome: menú ⋮ → «Instal·la l'aplicació» o «Afegeix a la pantalla d'inici».</p>
+      </div>
+      <div class="targeta">
+        <h2>Registrar de nou</h2>
+        <p class="ajuda" style="margin-top:0">Només si el telèfon canvia de persona. Rebrà un codi de telèfon nou; l'antic s'ha de donar de baixa al full (pestanya «Telèfons», Estat = BAIXA).</p>
+        <button id="botoReregistrar" class="boto ample">Esborrar el registre d'aquest telèfon</button>
+      </div>
     </div>
-    <div class="targeta" id="targetaInstal">
-      <h2>Instal·lar</h2>
-      <button id="botoInstal" class="boto prim ample" hidden>📲 Instal·lar l'aplicació</button>
-      <p class="ajuda">A Chrome: menú ⋮ → «Instal·la l'aplicació» o «Afegeix a la pantalla d'inici».</p>
-    </div>
-    <div class="targeta">
-      <h2>Registrar de nou</h2>
-      <p class="ajuda" style="margin-top:0">Només si el telèfon canvia de persona. Rebrà un codi de telèfon nou; l'antic s'ha de donar de baixa al full (pestanya «Telèfons», Estat = BAIXA).</p>
-      <button id="botoReregistrar" class="boto ample">Esborrar el registre d'aquest telèfon</button>
-    </div>
-    <p class="ajuda" style="text-align:center">Albarans CERA · v1.4.1 (prova) · El dictat per veu necessita connexió.</p>
+    <p class="ajuda" style="text-align:center">Albarans CERA · v1.5 (prova)</p>
   </section>
 </main>
 
@@ -264,21 +268,18 @@ const TIPUS = {
     titol: "Albarà d'entrega al CLB",
     subtitol: "CERA · ENTREGA D'EQUIPS SENSE COMANDA DE REPARACIÓ",
     camps: [
-      { id: 'data',   etiq: 'Data', tipus: 'date', oblig: true, paraules: ['data'] },
-      { id: 'parc',   etiq: 'Parc origen', llista: 'llistaParcs', oblig: true, paraules: ["parc d'origen", 'parc origen', 'parc'] },
+      { id: 'data',   etiq: 'Data', tipus: 'date', paraules: ['data'] },
+      { id: 'parc',   etiq: 'Parc origen', llista: 'llistaParcs', paraules: ["parc d'origen", 'parc origen', 'parc'] },
       { id: 'vehicle',etiq: 'Codi vehicle', paraules: ['codi de vehicle', 'codi vehicle', 'vehicle'], codi: true },
       { id: 'regio',  etiq: 'Regió', llista: 'llistaRegions', paraules: ['regio'] },
-      { id: 'equip',  etiq: 'Equip', llista: 'llistaEquipsSug', oblig: true, paraules: ['equip'] },
+      { id: 'equip',  etiq: 'Equip', llista: 'llistaEquipsSug', paraules: ['equip'] },
       { id: 'codi',   etiq: 'Codi de barres', codi: true, escaner: true, paraules: ['codi de barres', 'codi barres', 'codi de barra'] },
       { id: 'serie',  etiq: 'Número de sèrie', codi: true, escaner: true, paraules: ['numero de serie', 'num de serie', 'numero serie', 'serie'] },
       { id: 'incid',  etiq: 'Codi incidència', codi: true, paraules: ["codi d'incidencia", 'codi incidencia', 'incidencia'] },
       { id: 'obs',    etiq: 'Motiu / Descripció / Observacions', area: true, paraules: ['motiu', 'descripcio', 'observacions', 'observacio'] }
     ],
-    validar(d) {
-      const err = [];
-      if (!d.codi && !d.serie) err.push(['codi', 'Cal el codi de barres o el número de sèrie.']);
-      return err;
-    },
+    sufix: 'CLB',   // final del nom del PDF
+    validar() { return []; },   // cap camp obligatori (decisió de l'usuari)
     // equips que es registren a la pestanya "Equips" del full
     equips: a => [{ moviment: 'Entregat al CLB', equip: a.equip, codi: a.codi, serie: a.serie, incid: a.incid, vehicle: a.vehicle }],
     pdf: (a, f) => pdfCLB(a, f)
@@ -287,10 +288,10 @@ const TIPUS = {
 let tipusActual = 'clb';
 // Menú d'inici: els tipus sense formulari encara surten desactivats
 const MENU = [
-  { codi: '01', clau: 'clb', nom: 'Entrega al CLB', ic: '🚚' },
-  { codi: '02', clau: null,  nom: 'Entrega a parc', ic: '🚒' },
-  { codi: '03', clau: null,  nom: 'Entrega a AIRBOX', ic: '📦' },
-  { codi: '04', clau: null,  nom: 'Entrega extintors', ic: '🧯' }
+  { codi: '01', clau: 'clb', nom: 'Entrega al CLB' },
+  { codi: '02', clau: null,  nom: 'Entrega a parc' },
+  { codi: '03', clau: null,  nom: 'Entrega a AIRBOX' },
+  { codi: '04', clau: null,  nom: 'Entrega extintors' }
 ];
 const tipusPerCodi = codi => Object.keys(TIPUS).find(k => TIPUS[k].codi === codi);
 
@@ -340,7 +341,6 @@ function construirFormulari() {
       <div class="fila">
         ${c.area ? `<textarea id="f-${c.id}"></textarea>` :
           `<input id="f-${c.id}" type="${c.tipus || 'text'}" ${c.llista ? `list="${c.llista}"` : ''} ${c.codi ? 'autocapitalize="characters"' : ''}>`}
-        ${c.tipus === 'date' ? '' : `<button type="button" class="ico" data-mic="${c.id}" title="Dictar aquest camp">🎤</button>`}
         ${c.escaner ? `<button type="button" class="ico" data-scan="${c.id}" title="Escanejar">▥</button>` : ''}
       </div>
     </label>`).join('');
@@ -718,7 +718,12 @@ function pdfCLB(a, llistaFotos) {
   paginesFotos(doc, a, llistaFotos);
   return doc;
 }
-function nomFitxer(a) { return `${a.num}_${(a.equip || 'albara').replace(/[^\p{L}\p{N}]+/gu, '_')}.pdf`; }
+// Nom del PDF: Parc_Equip_Número_CLB.pdf (dins de cada camp, els espais i símbols es canvien per guions)
+const netejarNom = v => String(v || '').trim().replace(/[^\p{L}\p{N}.]+/gu, '-').replace(/^-+|-+$/g, '');
+function nomFitxer(a) {
+  const t = TIPUS[a.tipus] || {};
+  return `${netejarNom(a.parc) || 'SenseParc'}_${netejarNom(a.equip) || 'SenseEquip'}_${netejarNom(a.num) || 'esborrany'}_${t.sufix || 'ALB'}.pdf`;
+}
 function blobPDF(a, llistaFotos) { return TIPUS[a.tipus].pdf(a, llistaFotos).output('blob'); }
 function descarregarBlob(blob, nom) {
   const url = URL.createObjectURL(blob);
@@ -830,7 +835,7 @@ const formulariTocat = () => fotos.length || TIPUS[tipusActual].camps.some(c => 
 async function pintarInici() {
   $('#menuTipus').innerHTML = MENU.map(m => `
     <button class="menu-boto" data-obrir="${m.clau || ''}" ${m.clau ? '' : 'disabled'}>
-      <span class="ic">${m.ic}</span><span><b>${esc(m.nom)}</b><small>${m.clau ? 'Tipus ' + m.codi : 'Pròximament'}</small></span>
+      <span><b>${esc(m.nom)}</b>${m.clau ? '' : '<small>Pròximament</small>'}</span>
     </button>`).join('');
   const pend = (await BD.tots()).filter(a => a.sync === 'pendent').length;
   $('#avisPendents').style.display = pend ? 'block' : 'none';
@@ -858,7 +863,8 @@ $('#botoRegistrar').addEventListener('click', async () => {
   const b = $('#botoRegistrar'); b.disabled = true; $('#regEstat').textContent = 'Registrant…';
   try {
     const r = await Servei.registrar(url, dades);
-    CFG.desar({ url, codiTel: r.codi, token: r.token, nom: dades.nom, numero: dades.numero, tipusTel: dades.tipus, regio: dades.regio });
+    CFG.desar({ url, codiTel: r.codi, token: r.token, nom: dades.nom, numero: dades.numero, tipusTel: dades.tipus, regio: dades.regio,
+      hashClau: await hashText(dades.clau) });
     avisar(`Telèfon registrat amb el codi ${r.codi}.`);
     mostrarVista('v-inici');
   } catch (e) { $('#regEstat').textContent = "⚠ No s'ha pogut registrar: " + missatgeError(e); }
@@ -903,6 +909,8 @@ $('#botoDescartar2').addEventListener('click', descartar);
 
 $('#botoConfirmar').addEventListener('click', async () => {
   if (!esborrany) return;
+  const buit = !fotos.length && TIPUS[esborrany.tipus].camps.every(c => ['data', 'regio'].includes(c.id) || !esborrany[c.id]);
+  if (buit && !confirm("L'albarà no té cap dada. Voleu enviar-lo igualment?")) return;
   const b = $('#botoConfirmar'); b.disabled = true;
   try {
     const a = {
@@ -931,9 +939,6 @@ $('#botoConfirmar').addEventListener('click', async () => {
   finally { b.disabled = false; }
 });
 $('#botoCompartir').addEventListener('click', () => ultimPDF && compartirBlob(ultimPDF, nomFitxer(ultimDesat), ultimDesat.num));
-$('#botoMateixes').addEventListener('click', () => {
-  const a = ultimDesat; ultimPDF = null; netejarFormulari({ data: a.data, parc: a.parc, vehicle: a.vehicle, regio: a.regio }); mostrarVista('v-nou');
-});
 $('#botoInici').addEventListener('click', () => { ultimPDF = null; mostrarVista('v-inici'); });
 
 /* =====================================================================
@@ -992,11 +997,23 @@ function pintarConfig() {
   const c = CFG.llegir();
   $('#infoTelefon').innerHTML = `<dt>Codi de telèfon</dt><dd>${esc(c.codiTel)}</dd><dt>${c.tipusTel === 'Compartit' ? 'Nom del telèfon' : 'Nom'}</dt><dd>${esc(c.nom)}</dd>
     <dt>Número</dt><dd>${esc(c.numero)}</dd><dt>Tipus</dt><dd>${esc(c.tipusTel)}</dd>`;
-  $('#cfgRegio').value = c.regio || 'REG';
   $('#cfgUrl').value = c.url || '';
+  $('#seccioCoord').hidden = true; $('#targetaClauCoord').hidden = false; $('#clauCoord').value = '';
   BD.tots().then(t => { const n = t.filter(a => a.sync === 'pendent').length; $('#estatServei').textContent = n ? `${n} albarans pendents d'enviar.` : "Cap albarà pendent d'enviar."; });
 }
-$('#desarConfig').addEventListener('click', () => { CFG.canviar({ regio: ($('#cfgRegio').value.trim() || 'REG').toUpperCase() }); avisar('Desat.'); });
+// Secció del coordinador: s'obre amb la clau del CERA (es compara amb la que es va fer servir en registrar el telèfon)
+async function hashText(t) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(t).trim()));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+$('#obrirCoord').addEventListener('click', async () => {
+  const clau = $('#clauCoord').value.trim();
+  if (!clau) return;
+  const c = CFG.llegir(), h = await hashText(clau);
+  if (!c.hashClau) CFG.canviar({ hashClau: h });          // telèfons registrats abans d'aquesta versió
+  else if (c.hashClau !== h) { avisar('La clau no és correcta.'); return; }
+  $('#seccioCoord').hidden = false; $('#targetaClauCoord').hidden = true;
+});
 $('#desarServei').addEventListener('click', async () => {
   CFG.canviar({ url: $('#cfgUrl').value.trim() });
   $('#estatServei').textContent = 'Provant la connexió…';
