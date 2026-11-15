@@ -78,6 +78,25 @@
   .estat.pend { background:#fff4e5; color:#a35f00; }
   .estat.env { background:#eaf6ee; color:var(--verd); }
   #barraSync { display:none; margin-bottom:12px; }
+  [hidden] { display:none !important; }
+  /* albarà d'extintors */
+  .etq { display:block; font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--gris); margin-bottom:4px; }
+  .ext-fila { border:1px solid var(--linia); border-left:4px solid var(--vermell); border-radius:10px; padding:10px; margin-bottom:10px; background:#fff; }
+  .ext-fila:nth-child(even) { background:#f7f7f7; }
+  .ext-fila.error { border-color:var(--vermell); }
+  .ext-cap { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; color:var(--vermell); font-size:16px; }
+  .ext-fila label.camp { margin-bottom:8px; }
+  input.gran { font-size:22px; font-weight:800; letter-spacing:.04em; padding:9px 10px; }
+  .ext-tipus { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .ext-tipus button { border:1px solid #c9c9c9; background:#fff; border-radius:8px; padding:11px 2px; font-size:14px; font-weight:700; color:#1c1c1c; }
+  .ext-tipus button.actiu { background:var(--vermell); color:#fff; border-color:var(--vermell); }
+  .ext-tipus.error button { border-color:var(--vermell); background:#fff5f5; }
+  .ext-tipus.error button.actiu { background:var(--vermell); }
+  #extTotals { font-weight:600; color:#1c1c1c; margin:2px 0 10px; }
+  .ext-taula { width:100%; border-collapse:collapse; font-size:14px; }
+  .ext-taula th { text-align:left; font-size:11px; text-transform:uppercase; color:var(--gris); padding:4px; border-bottom:1px solid var(--linia); }
+  .ext-taula td { padding:5px 4px; border-bottom:1px solid #eee; vertical-align:top; }
+  .ext-taula td.codi { font-weight:800; font-size:16px; letter-spacing:.03em; word-break:break-all; }
 </style>
 </head>
 <body>
@@ -145,7 +164,7 @@
 
   <!-- ===================== REVISIÓ ===================== -->
   <section id="v-revisio" class="vista">
-    <div class="avis">Comproveu que tot és correcte. <b>Fins que no premeu «Validar i enviar», no s'envia res</b>: ni al registre, ni al Drive, ni al Telegram.</div>
+    <div class="avis">Comproveu que tot és correcte. <b>Fins que no premeu «Validar i enviar», no s'envia res</b>: ni al registre, ni al Drive, ni al Telegram<span id="avisCorreu">, ni per correu</span>.</div>
     <div class="targeta"><dl class="resum" id="resum"></dl>
       <button id="botoVeurePDF" class="boto ample" style="margin-top:12px">📄 Veure el PDF</button></div>
     <div class="botons">
@@ -206,7 +225,7 @@
         <button id="botoReregistrar" class="boto ample">Esborrar el registre d'aquest telèfon</button>
       </div>
     </div>
-    <p class="ajuda" style="text-align:center">Albarans CERA · v1.5 (prova)</p>
+    <p class="ajuda" style="text-align:center">Albarans CERA · v1.6 (prova)</p>
   </section>
 </main>
 
@@ -283,6 +302,18 @@ const TIPUS = {
     // equips que es registren a la pestanya "Equips" del full
     equips: a => [{ moviment: 'Entregat al CLB', equip: a.equip, codi: a.codi, serie: a.serie, incid: a.incid, vehicle: a.vehicle }],
     pdf: (a, f) => pdfCLB(a, f)
+  },
+  // Albarà d'entrega d'extintors: formulari propi (capçalera + llista d'extintors). Vegeu el bloc EXTINTORS.
+  ext: {
+    codi: '04',
+    nom: 'Entrega extintors',
+    titol: "Albarà d'entrega d'extintors",
+    sufix: 'EXT',
+    propi: true,     // el formulari, la lectura, la validació i el dictat els fa el bloc EXTINTORS
+    correu: true,    // en validar, el servei envia el correu de petició de recollida
+    equips: a => (a.extintors || []).map(e => ({ moviment: 'Petició de recollida', equip: 'Extintor ' + nomTipusExt(e, true).toLowerCase().replace('co₂', 'CO₂'),
+      codi: e.codi, serie: e.serie, parc: a.lloc, tipusExt: nomTipusExt(e, true) })),
+    pdf: (a, f) => pdfExtintors(a, f)
   }
 };
 let tipusActual = 'clb';
@@ -291,7 +322,7 @@ const MENU = [
   { codi: '01', clau: 'clb', nom: 'Entrega al CLB' },
   { codi: '02', clau: null,  nom: 'Entrega a parc' },
   { codi: '03', clau: null,  nom: 'Entrega a AIRBOX' },
-  { codi: '04', clau: null,  nom: 'Entrega extintors' }
+  { codi: '04', clau: 'ext', nom: 'Entrega extintors' }
 ];
 const tipusPerCodi = codi => Object.keys(TIPUS).find(k => TIPUS[k].codi === codi);
 
@@ -333,9 +364,12 @@ function avisar(msg) { if (!msg) return; try { alert(msg); } catch { console.war
 /* =====================================================================
    FORMULARI
    ===================================================================== */
+const AJUDA_DICTAT_CLB = $('#ajudaDictat').innerHTML;
 function construirFormulari() {
   const t = TIPUS[tipusActual];
   $('#capSub').textContent = 'DGPEIS · ' + t.titol;
+  $('#ajudaDictat').innerHTML = t.propi ? EXT.ajudaDictat : AJUDA_DICTAT_CLB;
+  if (t.propi) { EXT.construir(); netejarFormulari(); return; }
   $('#camps').innerHTML = t.camps.map(c => `
     <label class="camp"><span>${esc(c.etiq)}${c.oblig ? ' *' : ''}</span>
       <div class="fila">
@@ -349,6 +383,7 @@ function construirFormulari() {
 
 function netejarFormulari(mantenir = {}) {
   const cfg = CFG.llegir();
+  if (TIPUS[tipusActual].propi) { EXT.netejar(); $('#darrerDictat').textContent = ''; fotos = []; pintarFotos(); return; }
   for (const c of TIPUS[tipusActual].camps) { const el = $('#f-' + c.id); el.value = ''; el.classList.remove('error'); }
   $('#f-data').value = avui();
   if ($('#f-regio')) $('#f-regio').value = cfg.regio || 'REG';
@@ -358,6 +393,7 @@ function netejarFormulari(mantenir = {}) {
 }
 
 function llegirFormulari() {
+  if (TIPUS[tipusActual].propi) return EXT.llegir();
   const d = {};
   for (const c of TIPUS[tipusActual].camps) d[c.id] = $('#f-' + c.id).value.trim();
   return d;
@@ -365,6 +401,7 @@ function llegirFormulari() {
 
 function validar(d) {
   const t = TIPUS[tipusActual];
+  if (t.propi) return EXT.validar(d);
   const err = [];
   for (const c of t.camps) if (c.oblig && !d[c.id]) err.push([c.id, `Falta: ${c.etiq}.`]);
   err.push(...t.validar(d));
@@ -554,17 +591,22 @@ function escoltar({ continu, onText, onFi, boto }) {
 // Cada dictat és independent: només canvien els camps que s'hi esmenten (així es pot corregir dictant un sol camp)
 $('#botoDictar').addEventListener('click', () => {
   const b = $('#botoDictar');
+  const propi = TIPUS[tipusActual].propi;
+  const aplicar = text => propi ? EXT.aplicarDictat(text) : aplicarInterpretacio(text);
+  if (!recActiu && propi) EXT.iniciDictat();   // cada dictat parteix de l'estat d'abans de començar a parlar
   escoltar({
     continu: true, boto: b,
     onText: (f, p) => {
       const text = (f + ' ' + p).trim();
       $('#darrerDictat').textContent = '«' + text + '»';
       b.textContent = '⏹ Aturar el dictat';
-      aplicarInterpretacio(text);           // els camps s'omplen en directe
+      aplicar(text);                         // els camps s'omplen en directe
     },
     onFi: f => {
       b.textContent = "🎤 Dictar";
-      if (f && !aplicarInterpretacio(f)) avisar("No s'ha reconegut cap camp. Digueu el nom del camp abans del valor (ex.: «equip taula ERA»).");
+      if (f && !aplicar(f)) avisar(propi
+        ? "No s'ha reconegut res. Digueu el nom del camp abans del valor (ex.: «extintor número de sèrie AB1234 pols 6»)."
+        : "No s'ha reconegut cap camp. Digueu el nom del camp abans del valor (ex.: «equip taula ERA»).");
     }
   });
 });
@@ -677,7 +719,7 @@ function paginesFotos(doc, a, llista) {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(0);
       doc.text('Fotografies', 15, 19);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(90);
-      doc.text(`Albarà ${a.num} · ${a.equip || ''}`, 15, 24.5);
+      doc.text(`Albarà ${a.num} · ${a.equip || (a.extintors ? a.extintors.length + ' extintors · ' + (a.lloc || '') : '')}`, 15, 24.5);
       doc.setDrawColor(0); doc.setLineWidth(0.4); doc.line(15, 27, 282, 27);
     }
     const x = xs[i % 2];
@@ -722,6 +764,8 @@ function pdfCLB(a, llistaFotos) {
 const netejarNom = v => String(v || '').trim().replace(/[^\p{L}\p{N}.]+/gu, '-').replace(/^-+|-+$/g, '');
 function nomFitxer(a) {
   const t = TIPUS[a.tipus] || {};
+  // extintors: LlocRecollida_NNext_Número_EXT.pdf
+  if (t.propi) return `${netejarNom(a.lloc) || 'SenseLloc'}_${(a.extintors || []).length}ext_${netejarNom(a.num) || 'esborrany'}_${t.sufix}.pdf`;
   return `${netejarNom(a.parc) || 'SenseParc'}_${netejarNom(a.equip) || 'SenseEquip'}_${netejarNom(a.num) || 'esborrany'}_${t.sufix || 'ALB'}.pdf`;
 }
 function blobPDF(a, llistaFotos) { return TIPUS[a.tipus].pdf(a, llistaFotos).output('blob'); }
@@ -737,6 +781,425 @@ async function compartirBlob(blob, nom, titol) {
   } else descarregarBlob(blob, nom);
 }
 const blobABase64 = blob => new Promise(ok => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.readAsDataURL(blob); });
+
+/* =====================================================================
+   EXTINTORS (tipus 04): petició de recollida per l'empresa de manteniment
+   - Capçalera: data de preparació (avui per defecte), regió (llista tancada) i lloc de recollida
+     (parcs de la regió triada o «Altres»).
+   - Llista d'extintors: número de sèrie (obligatori), codi de barres i tipus (obligatori).
+   - Totes les dades queden al full (pestanyes Albarans i Equips) perquè, més endavant, la recepció
+     es pugui fer des de qualsevol telèfon i el PDF es pugui tornar a generar amb la signatura.
+   ===================================================================== */
+const CORREU_PETICIO = 'equips.reg@gencat.cat';
+const NOMS_REGIO = {
+  REC: "Regió d'Emergències Centre", REG: "Regió d'Emergències de Girona", RELL: "Regió d'Emergències de Lleida",
+  REMN: "Regió d'Emergències Metropolitana Nord", REMS: "Regió d'Emergències Metropolitana Sud",
+  RET: "Regió d'Emergències de Tarragona", RETE: "Regió d'Emergències de les Terres de l'Ebre"
+};
+const TIPUS_EXT = { CO2: 'CO₂', P6: 'Pols 6 kg', P9: 'Pols 9 kg', ALT: 'Altres' };
+const ORDRE_EXT = ['CO2', 'P6', 'P9', 'ALT'];
+const LLOC_ALTRES = '__altres';
+// Nom del tipus; amb «llarg», els «Altres» porten la descripció: «Altres (aigua)»
+function nomTipusExt(e, llarg) {
+  const n = TIPUS_EXT[e.tipus] || '';
+  return llarg && e.tipus === 'ALT' && e.altres ? `${n} (${e.altres})` : n;
+}
+function comptarExt(llista) {
+  const c = { CO2: 0, P6: 0, P9: 0, ALT: 0 };
+  for (const e of llista || []) if (c[e.tipus] !== undefined) c[e.tipus]++;
+  return c;
+}
+function resumTotalsExt(llista) {
+  const n = (llista || []).length, c = comptarExt(llista);
+  const parts = ORDRE_EXT.filter(t => c[t]).map(t => `${c[t]} ${TIPUS_EXT[t].toLowerCase().replace('co₂', 'CO₂')}`);
+  return `${n} extintor${n === 1 ? '' : 's'}${parts.length ? ': ' + parts.join(' · ') : ''}`;
+}
+// «Girona» → «Parc de Bombers de Girona»; «Amer» → «Parc de Bombers d'Amer»; «el Pont de Suert» → «Parc de Bombers del Pont de Suert»
+function nomParcBombers(nom) {
+  const n = String(nom).trim();
+  if (/^el /i.test(n)) return 'Parc de Bombers del ' + n.slice(3);
+  if (/^els /i.test(n)) return 'Parc de Bombers dels ' + n.slice(4);
+  if (/^(la |les |l')/i.test(n)) return 'Parc de Bombers de ' + n;
+  if (/^[aeiouàèéíòóúh]/i.test(n)) return "Parc de Bombers d'" + n;
+  return 'Parc de Bombers de ' + n;
+}
+
+const EXT = {
+  files: [],          // [{ serie, codi, tipus: 'CO2'|'P6'|'P9'|'ALT'|'', altres }]
+  inici: null,        // còpia de la llista en començar un dictat
+  ajudaDictat: "Dicteu la capçalera i els extintors dient el nom de cada camp abans del valor: «<i>Lloc de recollida parc de Figueres. " +
+    "Extintor número de sèrie AB1234 codi de barres 556677 pols 6. Extintor número de sèrie CD5678 CO2.</i>» Cada «extintor» afegeix una fila nova. " +
+    "Per corregir-ne un, digueu-ne el número: «<i>extintor 2 número de sèrie CD5679</i>». El tipus també es pot triar amb els botons.",
+
+  construir() {
+    $('#camps').innerHTML = `
+      <label class="camp"><span>Data de preparació *</span><input id="f-data" type="date"></label>
+      <label class="camp"><span>Regió d'Emergències *</span>
+        <select id="f-regio">${Object.entries(REGIONS).map(([k, v]) => `<option value="${k}">${k} · ${esc(v)}</option>`).join('')}</select></label>
+      <label class="camp"><span>Lloc de recollida *</span><select id="f-lloc"></select></label>
+      <label class="camp" id="campLlocAltres" hidden><span>Lloc de recollida (escriviu-lo) *</span><input id="f-llocAltres"></label>
+      <div class="camp">
+        <span class="etq">Extintors *</span>
+        <div id="extTotals"></div>
+        <div id="extFiles"></div>
+        <div class="botons" style="margin-bottom:14px">
+          <button type="button" class="boto prim" id="extAfegir">+ Afegir extintor</button>
+          <button type="button" class="boto" id="extEscanejar">▥ Escanejar i afegir</button>
+        </div>
+      </div>`;
+  },
+  netejar() {
+    this.files = [];
+    $('#f-data').value = avui();
+    const r = CFG.llegir().regio;
+    $('#f-regio').value = REGIONS[r] ? r : 'REG';
+    this.omplirLlocs('');
+    this.pintar();
+  },
+  omplirLlocs(valor) {
+    const regio = $('#f-regio').value;
+    const parcs = (PARCS[regio] || '').split('|').filter(Boolean).map(nomParcBombers);
+    const sel = $('#f-lloc');
+    sel.innerHTML = `<option value="">— Trieu el lloc —</option>` + parcs.map(p => `<option>${esc(p)}</option>`).join('') +
+      `<option value="${LLOC_ALTRES}">Altres (escriure'l)</option>`;
+    if (!valor) { sel.value = ''; $('#f-llocAltres').value = ''; }
+    else if (parcs.includes(valor)) sel.value = valor;
+    else { sel.value = LLOC_ALTRES; $('#f-llocAltres').value = valor; }
+    $('#campLlocAltres').hidden = sel.value !== LLOC_ALTRES;
+  },
+  lloc() { const s = $('#f-lloc').value; return s === LLOC_ALTRES ? $('#f-llocAltres').value.trim() : s; },
+
+  pintar() {
+    $('#extFiles').innerHTML = this.files.length ? this.files.map((f, i) => `
+      <div class="ext-fila" data-i="${i}">
+        <div class="ext-cap"><b>Extintor ${i + 1}</b><button type="button" class="boto petit" data-treure="${i}" aria-label="Treure l'extintor ${i + 1}">🗑 Treure</button></div>
+        <label class="camp"><span>Número de sèrie *</span>
+          <div class="fila"><input class="gran" data-camp="serie" value="${esc(f.serie)}" autocapitalize="characters" autocomplete="off">
+          <button type="button" class="ico" data-scanext="serie" title="Escanejar">▥</button></div></label>
+        <label class="camp"><span>Codi de barres</span>
+          <div class="fila"><input class="gran" data-camp="codi" value="${esc(f.codi)}" autocapitalize="characters" autocomplete="off" inputmode="text">
+          <button type="button" class="ico" data-scanext="codi" title="Escanejar">▥</button></div></label>
+        <span class="etq">Tipus *</span>
+        <div class="ext-tipus">${ORDRE_EXT.map(t => `<button type="button" data-tipus="${t}" class="${f.tipus === t ? 'actiu' : ''}">${TIPUS_EXT[t]}</button>`).join('')}</div>
+        ${f.tipus === 'ALT' ? `<input data-camp="altres" value="${esc(f.altres)}" placeholder="Quin tipus? (p. ex. aigua, espuma)" style="margin-top:8px">` : ''}
+      </div>`).join('')
+      : '<p class="ajuda" style="margin:0 0 10px">Encara no hi ha cap extintor. Afegiu-los amb els botons o dictant.</p>';
+    this.pintarTotals();
+  },
+  pintarTotals() { const plenes = this.files.filter(f => f.serie || f.codi || f.tipus); $('#extTotals').textContent = plenes.length ? resumTotalsExt(plenes) : ''; },
+  afegir(dades = {}) {
+    this.files.push({ serie: '', codi: '', tipus: '', altres: '', ...dades });
+    this.pintar();
+    const inputs = document.querySelectorAll('#extFiles [data-camp="serie"]');
+    inputs[inputs.length - 1]?.scrollIntoView({ block: 'center' });
+    return this.files.length - 1;
+  },
+
+  llegir() {
+    const extintors = this.files
+      .map(f => ({ serie: netejarCodi(f.serie || ''), codi: netejarCodi(f.codi || ''), tipus: f.tipus || '', altres: f.tipus === 'ALT' ? (f.altres || '').trim() : '' }))
+      .filter(e => e.serie || e.codi || e.tipus);      // les files totalment buides no compten
+    return { data: $('#f-data').value, regio: $('#f-regio').value, lloc: this.lloc(), extintors };
+  },
+  validar(d) {
+    const err = [];
+    document.querySelectorAll('#formulari .error').forEach(e => e.classList.remove('error'));
+    const marca = (sel, msg) => { err.push([null, msg]); document.querySelector(sel)?.classList.add('error'); };
+    if (!d.data) marca('#f-data', 'Falta la data de preparació.');
+    if (!d.regio) marca('#f-regio', "Falta la regió d'emergències.");
+    if (!d.lloc) marca($('#f-lloc').value === LLOC_ALTRES ? '#f-llocAltres' : '#f-lloc', 'Falta el lloc de recollida.');
+    // tornar a pintar sense les files buides perquè els números coincideixin amb els de l'avís
+    this.files = d.extintors.map(e => ({ ...e })); this.pintar();
+    if (!d.extintors.length) err.push([null, "Cal afegir com a mínim un extintor."]);
+    const vistos = {};
+    d.extintors.forEach((e, i) => {
+      const fila = `#extFiles [data-i="${i}"]`;
+      if (!e.serie) { err.push([null, `Extintor ${i + 1}: falta el número de sèrie.`]); document.querySelector(fila + ' [data-camp="serie"]')?.classList.add('error'); }
+      if (!e.tipus) { err.push([null, `Extintor ${i + 1}: falta el tipus.`]); document.querySelector(fila + ' .ext-tipus')?.classList.add('error'); }
+      if (e.serie) {
+        if (vistos[e.serie]) { err.push([null, `Extintors ${vistos[e.serie]} i ${i + 1}: tenen el mateix número de sèrie (${e.serie}).`]); document.querySelector(fila + ' [data-camp="serie"]')?.classList.add('error'); }
+        else vistos[e.serie] = i + 1;
+      }
+    });
+    return err;
+  },
+  tocat() { return this.files.some(f => f.serie || f.codi || f.tipus) || ($('#f-lloc')?.value || '') !== ''; },
+
+  resum(a) {
+    const c = comptarExt(a.extintors);
+    return `<dt>Tipus</dt><dd>${esc(TIPUS.ext.titol)}</dd>
+      <dt>Data de preparació</dt><dd>${esc(dataCat(a.data))}</dd>
+      <dt>Regió d'Emergències</dt><dd>${esc(NOMS_REGIO[a.regio] || a.regio)}</dd>
+      <dt>Lloc de recollida</dt><dd>${esc(a.lloc)}</dd>
+      <dt>Extintors (${a.extintors.length})</dt><dd style="white-space:normal"><table class="ext-taula"><tr><th>#</th><th>Núm. de sèrie</th><th>Codi de barres</th><th>Tipus</th></tr>${
+        a.extintors.map((e, i) => `<tr><td>${i + 1}</td><td class="codi">${esc(e.serie)}</td><td class="codi">${esc(e.codi) || '<span style="color:#aaa;font-weight:400">—</span>'}</td><td>${esc(nomTipusExt(e, true))}</td></tr>`).join('')}</table></dd>
+      <dt>Totals</dt><dd>${ORDRE_EXT.map(t => `${TIPUS_EXT[t]}: <b>${c[t]}</b>`).join(' · ')} · Total: <b>${a.extintors.length}</b></dd>
+      <dt>Fotografies</dt><dd style="white-space:normal">${fotos.length ? `<div class="fotos">${fotos.map(f => `<div><img src="${f.dataUrl}"></div>`).join('')}</div>` : 'Cap'}</dd>
+      <dt>Preparat per</dt><dd>${esc(a.autor)} (telèfon ${esc(a.telefon)})</dd>
+      <dt>En validar</dt><dd>Es registrarà al full, el PDF es guardarà al Drive i s'enviarà al Telegram, i s'enviarà el correu de <b>petició de recollida</b> a ${esc(CORREU_PETICIO)}.</dd>`;
+  },
+
+  /* ---------- dictat ---------- */
+  iniciDictat() { this.inici = JSON.parse(JSON.stringify(this.files)); },
+  aplicarDictat(text) {
+    const r = interpretarExt(text, this.inici || this.files);
+    if (r.data) $('#f-data').value = r.data;
+    if (r.regio && REGIONS[r.regio] && r.regio !== $('#f-regio').value) { $('#f-regio').value = r.regio; if (!r.lloc) this.omplirLlocs(''); }
+    if (r.lloc) {
+      if (r.lloc.regio && REGIONS[r.lloc.regio]) $('#f-regio').value = r.lloc.regio;
+      this.omplirLlocs(r.lloc.nom);
+    }
+    if (r.canvisFiles) { this.files = r.files; this.pintar(); }
+    document.querySelectorAll('#formulari .error').forEach(e => e.classList.remove('error'));
+    return r.n;
+  }
+};
+
+/* Events del formulari d'extintors (delegats: el formulari es reconstrueix en canviar de tipus) */
+$('#camps').addEventListener('input', e => {
+  if (!TIPUS[tipusActual].propi) return;
+  const camp = e.target.dataset?.camp, fila = e.target.closest('[data-i]');
+  if (camp && fila) { EXT.files[+fila.dataset.i][camp] = e.target.value; e.target.classList.remove('error'); if (camp !== 'altres') EXT.pintarTotals(); }
+});
+$('#camps').addEventListener('change', e => {
+  if (!TIPUS[tipusActual].propi) return;
+  const camp = e.target.dataset?.camp, fila = e.target.closest('[data-i]');
+  if (fila && (camp === 'serie' || camp === 'codi')) { const v = netejarCodi(e.target.value); e.target.value = v; EXT.files[+fila.dataset.i][camp] = v; }
+  if (e.target.id === 'f-regio') EXT.omplirLlocs('');
+  if (e.target.id === 'f-lloc') { $('#campLlocAltres').hidden = e.target.value !== LLOC_ALTRES; if (e.target.value === LLOC_ALTRES) $('#f-llocAltres').focus(); }
+});
+$('#camps').addEventListener('click', e => {
+  if (!TIPUS[tipusActual].propi) return;
+  const fila = e.target.closest('[data-i]'), i = fila ? +fila.dataset.i : -1;
+  const bt = e.target.closest('[data-tipus]'), btr = e.target.closest('[data-treure]'), bsc = e.target.closest('[data-scanext]');
+  if (bt && i >= 0) { EXT.files[i].tipus = bt.dataset.tipus; EXT.pintar(); if (bt.dataset.tipus === 'ALT') document.querySelector(`#extFiles [data-i="${i}"] [data-camp="altres"]`)?.focus(); }
+  if (btr && i >= 0) {
+    const f = EXT.files[i];
+    if ((f.serie || f.codi || f.tipus) && !confirm(`Voleu treure l'extintor ${i + 1}${f.serie ? ' (' + f.serie + ')' : ''}?`)) return;
+    EXT.files.splice(i, 1); EXT.pintar();
+  }
+  if (bsc && i >= 0) escanejar(v => { EXT.files[i][bsc.dataset.scanext] = netejarCodi(v); EXT.pintar(); });
+  if (e.target.id === 'extAfegir') { const n = EXT.afegir(); document.querySelectorAll('#extFiles [data-camp="serie"]')[n]?.focus(); }
+  if (e.target.id === 'extEscanejar') escanejar(v => { EXT.afegir({ codi: netejarCodi(v) }); });
+});
+
+/* ---------- interpretació del dictat d'extintors ---------- */
+const CLAUS_EXT = [
+  ['ext', ['extintors', 'extintor']],
+  ['serie', ['numero de serie', 'num de serie', 'numero serie', 'n de serie', 'serie']],
+  ['codi', ['codi de barres', 'codi barres', 'codi de barra', 'codi']],
+  ['tipus', ['tipus']],
+  ['co2', ['co2', 'co 2', 'co dos', 'ce o dos', 'dioxid de carboni', 'neu carbonica', 'carbonic']],
+  ['pols', ['pols quimica', 'pols']],
+  ['altres', ['un altre tipus', 'altre tipus', 'altres']],
+  ['data', ['data']],
+  ['regio', ['regio']],
+  ['lloc', ['lloc de recollida', 'lloc recollida', 'recollida', 'lloc']]
+];
+const numPols = v => { const n = norm(v); return /\b(6|sis)\b/.test(n) ? 'P6' : /\b(9|nou)\b/.test(n) ? 'P9' : ''; };
+function tipusDeText(v) {
+  const n = norm(v);
+  if (/co ?2|co dos|ce o dos|dioxid|carboni/.test(n)) return { tipus: 'CO2' };
+  if (/\bpols\b|\bkg\b|quilo/.test(n) && numPols(n)) return { tipus: numPols(n) };
+  if (/\baltres?\b/.test(n)) return { tipus: 'ALT', altres: v.replace(/^.*?\baltres?\b\s*(tipus\s*)?/i, '').trim() };
+  return null;
+}
+function interpretarExt(text, base) {
+  const n = norm(text);
+  const claus = [];
+  for (const [camp, ps] of CLAUS_EXT) for (const p of ps) claus.push({ camp, p });
+  claus.sort((a, b) => b.p.length - a.p.length);
+  const ocupat = new Array(n.length).fill(false), trobades = [];
+  for (const { camp, p } of claus) {
+    const re = new RegExp(`(^|[^a-z0-9])(${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=$|[^a-z0-9])`, 'g');
+    let m;
+    while ((m = re.exec(n))) {
+      const ini = m.index + m[1].length, fi = ini + m[2].length;
+      if (ocupat.slice(ini, fi).some(Boolean)) continue;
+      for (let i = ini; i < fi; i++) ocupat[i] = true;
+      trobades.push({ camp, ini, fi });
+    }
+  }
+  trobades.sort((a, b) => a.ini - b.ini);
+  const files = JSON.parse(JSON.stringify(base)), res = { files, n: 0, canvisFiles: false };
+  let cur = -1;
+  const tocats = new Map();   // camps omplerts en aquest dictat, per fila
+  const nova = () => { files.push({ serie: '', codi: '', tipus: '', altres: '' }); cur = files.length - 1; tocats.set(cur, new Set()); return cur; };
+  // si no s'ha dit «extintor», o el camp ja s'ha omplert en aquest dictat, comença una fila nova
+  const fila = camp => { if (cur < 0 || tocats.get(cur)?.has(camp)) nova(); return cur; };
+  const posar = (camp, val) => { const i = fila(camp); files[i][camp] = val; tocats.get(i).add(camp); res.canvisFiles = true; res.n++; };
+  const posarTipus = t => { const i = fila('tipus'); files[i].tipus = t.tipus; files[i].altres = t.altres || ''; tocats.get(i).add('tipus'); res.canvisFiles = true; res.n++; };
+  trobades.forEach((f, k) => {
+    const fiValor = k + 1 < trobades.length ? trobades[k + 1].ini : text.length;
+    const v = text.slice(f.fi, fiValor).replace(/^[\s:,.\-]*(és|es|són|son|:)?\s*/i, '').replace(/[\s,;.]+$/, '').trim();
+    switch (f.camp) {
+      case 'ext': {
+        const m = norm(v).match(/^(?:numero |num |n )?(\d{1,3})$/);
+        if (m && +m[1] >= 1 && +m[1] <= files.length) { cur = +m[1] - 1; tocats.set(cur, new Set()); }
+        else { nova(); res.canvisFiles = true; res.n++; const t = v && tipusDeText(v); if (t) posarTipus(t); }
+        break;
+      }
+      case 'serie': if (v) posar('serie', netejarCodi(v)); break;
+      case 'codi': if (v) posar('codi', netejarCodi(v)); break;
+      case 'tipus': { const t = tipusDeText(v); if (t) posarTipus(t); break; }
+      case 'co2': posarTipus({ tipus: 'CO2' }); break;
+      case 'pols': { const t = numPols(v); if (t) posarTipus({ tipus: t }); break; }
+      case 'altres': posarTipus({ tipus: 'ALT', altres: v ? v.charAt(0).toUpperCase() + v.slice(1) : '' }); break;
+      case 'data': { const d = interpretarData(v); if (d) { res.data = d; res.n++; } break; }
+      case 'regio': {
+        const nv = norm(v);
+        const r = Object.keys(REGIONS).find(k => nv.replace(/\s/g, '') === k.toLowerCase()) ||
+                  Object.entries(REGIONS).find(([, nom]) => nv.includes(norm(nom)))?.[0];
+        if (r) { res.regio = r; res.n++; }
+        break;
+      }
+      case 'lloc': {
+        if (!v) break;
+        const p = trobarParc(v);
+        res.lloc = p && p.regio ? { nom: nomParcBombers(p.nom), regio: p.regio } : { nom: v.charAt(0).toUpperCase() + v.slice(1) };
+        res.n++;
+        break;
+      }
+    }
+  });
+  return res;
+}
+
+/* =====================================================================
+   PDF DE L'ALBARÀ D'EXTINTORS (A4 horitzontal, en color, 20 extintors per full)
+   Si a.recepcio = { nom, data, signatura (imatge PNG en dataURL) }, s'omple la part de recepció
+   (preparat per a la recepció des del telèfon, més endavant).
+   ===================================================================== */
+const LOGO_BOMBERS_VERMELL = 'data:image/png;base64,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';
+const C_VERMELL = [200, 16, 46], C_ROSAT = [251, 233, 236], C_GRIS = [243, 243, 243], C_VORA = [122, 122, 122], C_FOSC = [90, 10, 22];
+function seccioExt(doc, x, y, text) {
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.6);
+  const t = text.toUpperCase(), w = doc.getTextWidth(t) + t.length * 0.12 + 5;
+  doc.setFillColor(...C_VERMELL); doc.roundedRect(x, y - 3.7, w, 5, 0.9, 0.9, 'F');
+  doc.setTextColor(255); doc.text(t, x + 2.5, y, { charSpace: 0.12 });
+}
+function casellaExt(doc, x, y, w, h, etiq, valor, opc = {}) {
+  if (opc.fons) { doc.setFillColor(...opc.fons); doc.rect(x, y, w, h, 'F'); }
+  doc.setDrawColor(...C_VORA); doc.setLineWidth(0.3); doc.rect(x, y, w, h);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(5.3); doc.setTextColor(...C_VERMELL);
+  doc.text(etiq.toUpperCase(), x + 1.8, y + 3.2, { charSpace: 0.1 });
+  if (valor !== undefined && valor !== null && valor !== '') {
+    doc.setTextColor(0); doc.setFont('helvetica', opc.negreta ? 'bold' : 'normal');
+    ajustarText(doc, String(valor), w - 3.6, opc.mida || 11, 7);
+    doc.text(String(valor), opc.centre ? x + w / 2 : x + 1.8, y + h - 2.6, opc.centre ? { align: 'center' } : undefined);
+  }
+}
+// Redueix la mida de la lletra fins que el text hi càpiga
+function ajustarText(doc, text, ampleMax, mida, minim) {
+  let m = mida; doc.setFontSize(m);
+  while (doc.getTextWidth(text) > ampleMax && m > minim) { m -= 0.5; doc.setFontSize(m); }
+  return m;
+}
+function taulaExt(doc, x, y, files, primer) {
+  const cols = [['#', 7], ['Número de sèrie *', 40], ['Codi de barres', 39], ['CO2', 11], ['Pols\n6 kg', 11], ['Pols\n9 kg', 11], ['Altres', 11]];
+  const hCap = 7, hFila = 7;
+  const tipusCol = { CO2: 3, P6: 4, P9: 5, ALT: 6 };
+  // capçalera
+  let cx = x;
+  doc.setLineWidth(0.3); doc.setDrawColor(...C_VORA);
+  for (const [nom, w] of cols) {
+    doc.setFillColor(...C_ROSAT); doc.rect(cx, y, w, hCap, 'FD');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(5.4); doc.setTextColor(...C_FOSC);
+    const l = nom.toUpperCase().split('\n');
+    if (w <= 11) l.forEach((t, k) => doc.text(t, cx + w / 2, y + (l.length === 1 ? 4.4 : 3 + k * 2.4), { align: 'center' }));
+    else doc.text(l[0], cx + 1.5, y + 4.4);
+    cx += w;
+  }
+  // files
+  for (let r = 0; r < 10; r++) {
+    const fy = y + hCap + r * hFila, e = files[r];
+    cx = x;
+    cols.forEach(([, w], k) => {
+      if (r % 2 === 0) { doc.setFillColor(...C_GRIS); doc.rect(cx, fy, w, hFila, 'FD'); } else doc.rect(cx, fy, w, hFila);
+      cx += w;
+    });
+    // número de fila
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C_VERMELL);
+    doc.text(String(primer + r), x + 3.5, fy + 4.6, { align: 'center' });
+    // caselles de tipus
+    let bx = x + 7 + 40 + 39;
+    for (let k = 3; k < 7; k++) {
+      const w = cols[k][1], qx = bx + w / 2 - 1.8, qy = fy + hFila / 2 - 1.8;
+      const marcat = e && tipusCol[e.tipus] === k;
+      doc.setDrawColor(...C_VERMELL); doc.setLineWidth(0.3);
+      if (marcat) {
+        doc.setFillColor(...C_VERMELL); doc.rect(qx, qy, 3.6, 3.6, 'FD');
+        doc.setDrawColor(255); doc.setLineWidth(0.55);
+        doc.line(qx + 0.8, qy + 0.8, qx + 2.8, qy + 2.8); doc.line(qx + 2.8, qy + 0.8, qx + 0.8, qy + 2.8);
+      } else { doc.setFillColor(255); doc.rect(qx, qy, 3.6, 3.6, 'FD'); }
+      bx += w;
+    }
+    doc.setDrawColor(...C_VORA); doc.setLineWidth(0.3);
+    if (!e) continue;
+    // número de sèrie i codi de barres: tan grans com hi càpiguen, en negreta
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+    const desc = e.tipus === 'ALT' && e.altres ? e.altres : '';
+    if (e.serie) { ajustarText(doc, e.serie, 40 - 3, 13, 6); doc.text(e.serie, x + 7 + 1.5, fy + (desc ? 4.4 : 5.1)); }
+    if (desc) { doc.setFont('helvetica', 'normal'); doc.setTextColor(...C_VERMELL); ajustarText(doc, 'Altres: ' + desc, 37, 5.2, 4); doc.text('Altres: ' + desc, x + 7 + 1.5, fy + 6.5); }
+    if (e.codi) { doc.setFont('helvetica', 'bold'); doc.setTextColor(0); ajustarText(doc, e.codi, 39 - 3, 13, 6); doc.text(e.codi, x + 7 + 40 + 1.5, fy + 5.1); }
+  }
+}
+function pdfExtintors(a, llistaFotos) {
+  const doc = nouPDF();
+  const llista = a.extintors || [];
+  const fulls = Math.max(1, Math.ceil(llista.length / 20));
+  const c = comptarExt(llista);
+  const rec = a.recepcio || {};
+  for (let p = 0; p < fulls; p++) {
+    if (p) doc.addPage();
+    const darrer = p === fulls - 1;
+    // capçalera
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...C_VERMELL);
+    doc.text(TIPUS.ext.titol, 15, 19.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(40);
+    doc.text("REGIÓ D'EMERGÈNCIES · RECOLLIDA D'EXTINTORS PER L'EMPRESA DE MANTENIMENT", 15, 25.5, { charSpace: 0.15 });
+    try { doc.addImage(LOGO_BOMBERS_VERMELL, 'PNG', 282 - 29.9, 13, 29.9, 11, 'logo', 'FAST'); } catch (err) { console.warn('logo', err); }
+    doc.setDrawColor(...C_VERMELL); doc.setLineWidth(0.9); doc.line(15, 30.5, 282, 30.5);
+    // preparació
+    seccioExt(doc, 15, 36.5, "Preparació de l'albarà");
+    casellaExt(doc, 15, 38.5, 100, 10.5, 'Preparat per (nom o codi) *', a.autor);
+    casellaExt(doc, 115, 38.5, 30, 10.5, 'Telèfon', a.telefon);
+    casellaExt(doc, 145, 38.5, 64, 10.5, 'Núm. albarà', a.num);
+    casellaExt(doc, 209, 38.5, 73, 10.5, 'Data de preparació *', dataCat(a.data));
+    casellaExt(doc, 15, 49, 100, 10.5, "Regió d'Emergències *", NOMS_REGIO[a.regio] || a.regio);
+    casellaExt(doc, 115, 49, 167, 10.5, 'Lloc de recollida *', a.lloc);
+    // extintors
+    seccioExt(doc, 15, 65, 'Extintors entregats');
+    taulaExt(doc, 15, 67, llista.slice(p * 20, p * 20 + 10), p * 20 + 1);
+    taulaExt(doc, 152, 67, llista.slice(p * 20 + 10, p * 20 + 20), p * 20 + 11);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(70);
+    doc.text("Tipus d'extintor (obligatori): una sola casella per extintor. Si és «Altres», s'indica el tipus sota el número de sèrie.", 15, 147.5);
+    if (darrer) {
+      // totals
+      const tw = 267 / 5, ty = 150;
+      [['Total CO2', c.CO2], ['Total pols 6 kg', c.P6], ['Total pols 9 kg', c.P9], ['Total altres', c.ALT]].forEach(([e, v], k) =>
+        casellaExt(doc, 15 + k * tw, ty, tw, 9, e, String(v), { fons: C_ROSAT, negreta: true, mida: 12, centre: true }));
+      casellaExt(doc, 15 + 4 * tw, ty, tw, 9, 'Total extintors', String(llista.length), { negreta: true, mida: 12, centre: true });
+      doc.setDrawColor(...C_VERMELL); doc.setLineWidth(0.8); doc.rect(15 + 4 * tw + 0.4, ty + 0.4, tw - 0.8, 8.2);
+      // recepció
+      seccioExt(doc, 15, 166, "Recepció per l'empresa de manteniment");
+      casellaExt(doc, 15, 168, 120, 14.5, 'Rebut per (nom o codi) *', rec.nom);
+      casellaExt(doc, 135, 168, 47, 14.5, 'Data de recepció *', rec.data ? dataCat(rec.data) : '');
+      casellaExt(doc, 182, 168, 100, 14.5, 'Signatura de qui rep *', '');
+      if (rec.signatura) { try { doc.addImage(rec.signatura, 'PNG', 200, 171, 64, 11); } catch (err) { console.warn('signatura', err); } }
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C_VERMELL);
+      doc.text('Continua al full següent ›', 282, 156, { align: 'right' });
+    }
+    // peu
+    doc.setDrawColor(...C_VERMELL); doc.setLineWidth(0.4); doc.line(15, 186, 282, 186);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(0);
+    doc.text('* Camp obligatori.' + (llistaFotos && llistaFotos.length ? ` S'adjunten ${llistaFotos.length} fotografies al final de l'albarà.` : ''), 15, 189.5);
+    doc.text(`Full ${p + 1} de ${fulls}`, 282, 189.5, { align: 'right' });
+  }
+  paginesFotos(doc, a, llistaFotos);
+  return doc;
+}
 
 /* =====================================================================
    SERVEI DE REGISTRE (Google Apps Script del compte responsableregequips)
@@ -761,7 +1224,7 @@ const Servei = {
     const t = TIPUS[a.tipus];
     const albara = { ...a, pdfB64: undefined };
     const r = await this.post({ accio: 'nou', albara, equips: t.equips(a), pdf: a.pdfB64, nomFitxer: nomFitxer(a) });
-    return r.url || '';
+    return r;
   },
   async eliminar(id) { await this.post({ accio: 'eliminar', id }); },
   async llistar() {
@@ -781,7 +1244,8 @@ async function enviarPendents() {
     const pend = (await BD.tots()).filter(a => a.sync === 'pendent').sort((x, y) => x.creat.localeCompare(y.creat));
     for (const a of pend) {
       try {
-        a.url = await Servei.nou(a);
+        const r = await Servei.nou(a);
+        a.url = r.url || ''; if (r.correu) a.correu = r.correu;
         a.sync = 'enviat'; a.enviat = new Date().toISOString(); delete a.pdfB64;
         await BD.desar(a); n++;
       } catch (e) { darrerError = missatgeError(e); console.warn('Enviament', a.num, e); break; }
@@ -827,7 +1291,7 @@ $('#botoEnrere').addEventListener('click', () => {
   esborrany = null; mostrarVista('v-inici');
 });
 $('#botoConfig').addEventListener('click', () => mostrarVista('v-config'));
-const formulariTocat = () => fotos.length || TIPUS[tipusActual].camps.some(c => !['data', 'regio'].includes(c.id) && $('#f-' + c.id).value.trim());
+const formulariTocat = () => fotos.length || (TIPUS[tipusActual].propi ? EXT.tocat() : TIPUS[tipusActual].camps.some(c => !['data', 'regio'].includes(c.id) && $('#f-' + c.id).value.trim()));
 
 /* =====================================================================
    INICI
@@ -878,8 +1342,10 @@ $('#botoRevisar').addEventListener('click', () => {
   const d = llegirFormulari();
   const err = validar(d);
   if (err.length) { avisar("Reviseu l'albarà:\n\n" + err.map(e => '• ' + e[1]).join('\n')); return; }
-  esborrany = { ...d, tipus: tipusActual, autor: CFG.llegir().nom };
+  esborrany = { ...d, tipus: tipusActual, autor: CFG.llegir().nom, telefon: CFG.llegir().codiTel };
   const t = TIPUS[tipusActual];
+  $('#avisCorreu').hidden = !t.correu;
+  if (t.propi) { $('#resum').innerHTML = EXT.resum(esborrany); mostrarVista('v-revisio'); return; }
   $('#resum').innerHTML = `<dt>Tipus</dt><dd>${esc(t.titol)}</dd>` + t.camps.map(c =>
     `<dt>${esc(c.etiq)}</dt><dd>${esc(c.tipus === 'date' ? dataCat(d[c.id]) : d[c.id]) || '<span style="color:#aaa">—</span>'}</dd>`).join('') +
     `<dt>Fotografies</dt><dd>${fotos.length ? `<div class="fotos">${fotos.map(f => `<div><img src="${f.dataUrl}"></div>`).join('')}</div>` : 'Cap'}</dd>` +
@@ -909,7 +1375,7 @@ $('#botoDescartar2').addEventListener('click', descartar);
 
 $('#botoConfirmar').addEventListener('click', async () => {
   if (!esborrany) return;
-  const buit = !fotos.length && TIPUS[esborrany.tipus].camps.every(c => ['data', 'regio'].includes(c.id) || !esborrany[c.id]);
+  const buit = !fotos.length && !TIPUS[esborrany.tipus].propi && TIPUS[esborrany.tipus].camps.every(c => ['data', 'regio'].includes(c.id) || !esborrany[c.id]);
   if (buit && !confirm("L'albarà no té cap dada. Voleu enviar-lo igualment?")) return;
   const b = $('#botoConfirmar'); b.disabled = true;
   try {
@@ -933,7 +1399,10 @@ $('#botoConfirmar').addEventListener('click', async () => {
     await enviarPendents();
     const ara = (await BD.tots()).find(x => x.id === a.id);
     $('#estatEnviament').innerHTML = ara?.sync === 'enviat'
-      ? '✓ Enviat: registrat al full de Google, PDF al Drive i missatge al Telegram.'
+      ? (TIPUS[a.tipus].correu
+        ? `✓ Enviat: registrat al full de Google, PDF al Drive, missatge al Telegram i ${ara.correu && !/^ERROR/.test(ara.correu)
+            ? 'correu de petició de recollida a ' + esc(CORREU_PETICIO) + '.' : '<b>⚠ el correu de petició no s\'ha pogut enviar</b>' + (ara.correu ? ' (' + esc(ara.correu) + ')' : '') + '. Aviseu el coordinador.'}`
+        : '✓ Enviat: registrat al full de Google, PDF al Drive i missatge al Telegram.')
       : `⚠ No s'ha pogut enviar${darrerError ? ' (' + esc(darrerError) + ')' : ''}. Queda pendent i s'enviarà automàticament quan hi hagi connexió.`;
   } catch (e) { avisar("No s'ha pogut generar l'albarà: " + missatgeError(e)); console.error(e); }
   finally { b.disabled = false; }
@@ -956,10 +1425,13 @@ async function pintarEliminar() {
   $('#barraElim').style.display = 'none';
   $('#llistaElim').innerHTML = llistaElim.length ? llistaElim.map(a => {
     const queden = Math.max(0, Math.floor(HORES_PER_ELIMINAR - horesDes(a.enviat || a.creat)));
+    const linies = TIPUS[a.tipus]?.propi
+      ? `<div class="sub">${esc(dataCat(a.data))} · ${esc(a.lloc)}</div><div class="sub">${esc(resumTotalsExt(a.extintors))}</div>`
+      : `<div class="sub">${esc(dataCat(a.data))} · ${esc(a.parc)}${a.vehicle ? ' / ' + esc(a.vehicle) : ''} · ${esc(a.equip)}</div>
+      <div class="sub">${a.codi ? 'CB ' + esc(a.codi) : ''}${a.codi && a.serie ? ' · ' : ''}${a.serie ? 'NS ' + esc(a.serie) : ''}</div>`;
     return `<div class="element">
       <div class="cap"><span>${esc(a.num)}</span><span class="etiqueta">${esc(TIPUS[a.tipus]?.nom || '')}</span></div>
-      <div class="sub">${esc(dataCat(a.data))} · ${esc(a.parc)}${a.vehicle ? ' / ' + esc(a.vehicle) : ''} · ${esc(a.equip)}</div>
-      <div class="sub">${a.codi ? 'CB ' + esc(a.codi) : ''}${a.codi && a.serie ? ' · ' : ''}${a.serie ? 'NS ' + esc(a.serie) : ''}</div>
+      ${linies}
       <div class="sub">${a.sync === 'pendent' ? '<span class="estat pend">Pendent d\'enviar</span>' : `<span class="estat env">Enviat</span> · es pot eliminar durant ${queden} h més`}</div>
       <div class="botons" style="margin-top:8px"><button class="boto petit" data-elim="${esc(a.id)}">🗑 Eliminar</button></div>
     </div>`;
@@ -973,7 +1445,8 @@ $('#llistaElim').addEventListener('click', e => {
   $('#elimNum').textContent = perEliminar.num;
   $('#elimText').textContent = perEliminar.sync === 'pendent'
     ? "Encara no s'ha enviat: s'esborrarà del telèfon i no arribarà enlloc."
-    : "S'esborrarà del registre de Google, el PDF anirà a la paperera del Drive i s'esborrarà el missatge de Telegram.";
+    : "S'esborrarà del registre de Google, el PDF anirà a la paperera del Drive i s'esborrarà el missatge de Telegram." +
+      (TIPUS[perEliminar.tipus]?.correu ? ` Com que la petició ja s'ha enviat per correu, s'enviarà un correu d'ANUL·LACIÓ a ${CORREU_PETICIO}.` : '');
   $('#dlgEliminar').showModal();
 });
 $('#elimCancel').addEventListener('click', () => $('#dlgEliminar').close());
